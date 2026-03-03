@@ -1,0 +1,54 @@
+name: Test
+on: push
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+    tests:
+        name: Run tests
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                python-version: ['3.10', '3.11', '3.12', '3.13']
+                django-version: ['4.2','5.0','5.1','5.2', '6.0']
+                postgres-version: [15,16, 17, 18]
+                psycopg: [psycopg2, psycopg]
+                exclude:
+                  # https://docs.djangoproject.com/en/dev/faq/install/#what-python-version-can-i-use-with-django
+                  - python-version: '3.13'
+                    django-version: '4.2'
+                  - python-version: '3.13'
+                    django-version: '5.0'
+                  - python-version: '3.10'
+                    django-version: '6.0'
+                  - python-version: '3.11'
+                    django-version: '6.0'
+        services:
+          postgres:
+            image: postgres:${{ matrix.postgres-version }}
+            env:
+              POSTGRES_USER: postgres
+              POSTGRES_PASSWORD: postgres
+              POSTGRES_DB: postgres
+            ports:
+            - 5432:5432
+            options: >-
+              --health-cmd pg_isready
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+        steps:
+        - uses: actions/checkout@v3
+
+        - name: Set up Python ${{ matrix.python-version }}
+          uses: actions/setup-python@v4
+          with:
+            python-version: ${{ matrix.python-version }}
+        - run: |
+            pip install 'django==${{matrix.django-version}}' django-netfields ${{matrix.psycopg}}
+        - run: |
+            ./manage.py test
